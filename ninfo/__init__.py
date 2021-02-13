@@ -1,4 +1,11 @@
+from __future__ import print_function
 from pkg_resources import iter_entry_points
+
+import sys
+
+if not sys.warnoptions:
+    import warnings
+    warnings.simplefilter("ignore")
 
 import memcache
 
@@ -6,7 +13,7 @@ import logging
 logger = logging.getLogger("ninfo")
 
 import os
-import ConfigParser
+import configparser
 
 from mako.template import Template
 
@@ -21,7 +28,7 @@ def clean_cache_key(s):
 
 class PluginError(Exception):
     def __init__(self, message, cause):
-        super(PluginError, self).__init__(message + u', caused by ' + repr(cause))
+        super(PluginError, self).__init__(message + ', caused by ' + repr(cause))
         self.cause = cause
 
 class PluginInitError(PluginError):
@@ -45,17 +52,15 @@ class PluginBase(object):
         self.config = config
         self.plugin_config = plugin_config
         self.initialized = False
-        self._name = self.name
         if 'disabled' in plugin_config:
             return
 
     def init(self):
         if self.initialized:
-            return True
-        try :
+            return
+        try:
             self.initialized = (self.setup() != False)
-            return self.initialized
-        except Exception, e:
+        except Exception as e:
             logger.exception("Error initializing plugin %s" % self.name)
             raise PluginInitError("Error initializing plugin %s" % self.name, cause=e)
 
@@ -89,8 +94,6 @@ class PluginBase(object):
         return self.render_template('html', arg, result)
 
     def _do_render(self, filename, arg, result):
-        if filename is None:
-            return str(result)
         kw = {}
         if 'html' in filename:
             kw['default_filters'] = ['h']
@@ -109,13 +112,16 @@ class PluginBase(object):
                 out = "<pre>" + out + "</pre>"
             return out
 
+        if filename is None:
+            return str(result)
+
         out = self._do_render(filename, arg, result)
         return out
 
     def get_template(self, output_type):
         code = inspect.getsourcefile(self.__class__)
         path = os.path.dirname(code)
-        filename = "%s_template_%s.mako" % (self._name, output_type)
+        filename = "%s_template_%s.mako" % (self.name, output_type)
         template = os.path.join(path, filename)
         if os.path.exists(template):
             return template
@@ -126,14 +132,11 @@ class PluginBase(object):
             return getattr(self, func)
 
 class Ninfo:
-    def __init__(self, config_file=None, plugin_modules=None):
+    def __init__(self, config_file=None):
         self.plugin_instances = {}
-        if plugin_modules:
-            self.plugin_modules = plugin_modules
-        else:
-            self.plugin_modules = {}
-            for ep in iter_entry_points(group='ninfo.plugin'):
-                self.plugin_modules[ep.name] = ep
+        self.plugin_modules = {}
+        for ep in iter_entry_points(group='ninfo.plugin'):
+            self.plugin_modules[ep.name] = ep
 
         self.read_config(config_file)
 
@@ -141,7 +144,7 @@ class Ninfo:
         return plugin in self.plugin_modules
 
     def read_config(self, config_file):
-        cp = ConfigParser.ConfigParser()
+        cp = configparser.ConfigParser()
         if config_file:
             cp.read([config_file])
         elif os.getenv("INFO_CONFIG_FILE"):
@@ -166,7 +169,7 @@ class Ninfo:
         for section in self.config:
             clone = self.config[section].get("clone")
             disabled = self.config[section].get("disabled")
-            if clone and not disabled and clone in self.plugin_modules:
+            if clone and not disabled:
                 plugin_name = section.split(":")[1]
                 self.plugin_modules[plugin_name] = self.plugin_modules[clone]
 
@@ -220,14 +223,6 @@ class Ninfo:
         if 'disabled' in plugin_config:
             return None
 
-        # If this plugin was cloned, merge its config on top of the config from
-        # the cloned plugin
-        if 'clone' in plugin_config:
-            clone_key = 'plugin:' + plugin_config['clone']
-            new_cfg = self.config.get(clone_key, {}).copy()
-            new_cfg.update(plugin_config)
-            plugin_config = new_cfg
-
         try :
             cls = self.plugin_modules[plugin].load().plugin_class
             cls.long_description = cls.__doc__
@@ -268,6 +263,8 @@ class Ninfo:
 
         try:
             plugin_obj.init()
+            if not plugin_obj.initialized:
+                return
             get_info_args = len(inspect.getargspec(plugin_obj.get_info)[0])
             if get_info_args == 3:
                 # This plugin supports context.
@@ -280,7 +277,7 @@ class Ninfo:
             return ret
         except PluginInitError:
             raise
-        except Exception, e:
+        except Exception as e:
             logger.exception("Error running plugin %s" % plugin)
             if retries:
                 return self.get_info(plugin, arg, options, retries-1)
@@ -310,7 +307,7 @@ class Ninfo:
                 continue
             if not self.compatible_argument(p.name, arg):
                 continue
-            try :
+            try:
                 result = self.get_info(p.name, arg, options)
                 yield p, result
             except PluginError:
@@ -324,8 +321,8 @@ class Ninfo:
 
     def show_info(self, arg, plugins=None, options={}):
         for p, result in self.get_info_iter(arg, plugins, options):
-            print '*** %s (%s) ***' % (p.title, p.description)
-            print p.render_template('text', arg, result)
+            print('*** %s (%s) ***' % (p.title, p.description))
+            print(p.render_template('text', arg, result))
 
     def convert(self, arg, to_type):
         arg_type = util.get_type(arg)
@@ -334,7 +331,7 @@ class Ninfo:
                 if (arg_type, to_type) in p.converters:
                     p.init()
                     yield p.name, p.get_converter(arg_type, to_type)(arg)
-            except Exception:
+            except PluginError:
                 logger.exception("Error running plugin %s", p.name)
 
 def main():
@@ -351,9 +348,9 @@ def main():
 
     p = Ninfo()
     if options.list:
-        print "%-20s %-20s %s" %("Name", "Title", "Description")
+        print("%-20s %-20s %s" %("Name", "Title", "Description"))
         for pl in p.plugins:
-            print "%-20s %-20s %s" % (pl.name, pl.title, pl.description)
+            print("%-20s %-20s %s" % (pl.name, pl.title, pl.description))
         return
 
     context_options = {}
@@ -368,7 +365,7 @@ def main():
     plugins = options.plugins or None
     for arg in args:
         if len(args) != 1:
-            print "=== %s === " % (arg)
+            print("=== %s === " % (arg))
         p.show_info(arg, plugins=plugins, options=context_options)
 
 if __name__ == "__main__":
