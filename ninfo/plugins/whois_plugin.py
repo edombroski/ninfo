@@ -19,7 +19,7 @@ class whois(PluginBase):
 
             output = output.decode('ascii','ignore')
             return dict(status=status, output=output)
-        except FileNotFoundError:
+        except OSError:
             return dict(status="1", output="whois binary not found on system.")
 
     def render_template(self, output_type, arg, result):
