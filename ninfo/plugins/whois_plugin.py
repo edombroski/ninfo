@@ -12,12 +12,15 @@ class whois(PluginBase):
     local =     False
 
     def get_info(self, arg):
-        pipe = Popen(["whois", arg], stdout=PIPE)
-        output = pipe.communicate()[0]
-        status = pipe.returncode
+        try:
+            pipe = Popen(["whois", arg], stdout=PIPE)
+            output = pipe.communicate()[0]
+            status = pipe.returncode
 
-        output = output.decode('ascii','ignore')
-        return dict(status=status, output=output)
+            output = output.decode('ascii','ignore')
+            return dict(status=status, output=output)
+        except FileNotFoundError:
+            return dict(status="1", output="whois binary not found on system.")
 
     def render_template(self, output_type, arg, result):
         if not result:
