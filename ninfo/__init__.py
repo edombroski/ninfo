@@ -58,7 +58,7 @@ class PluginBase(object):
     def init(self):
         if self.initialized:
             return
-        try :
+        try:
             self.initialized = (self.setup() != False)
         except Exception as e:
             logger.exception("Error initializing plugin %s" % self.name)
@@ -263,6 +263,8 @@ class Ninfo:
 
         try:
             plugin_obj.init()
+            if not plugin_obj.initialized:
+                return
             get_info_args = len(inspect.getargspec(plugin_obj.get_info)[0])
             if get_info_args == 3:
                 # This plugin supports context.
@@ -305,7 +307,7 @@ class Ninfo:
                 continue
             if not self.compatible_argument(p.name, arg):
                 continue
-            try :
+            try:
                 result = self.get_info(p.name, arg, options)
                 yield p, result
             except PluginError:
