@@ -23,10 +23,5 @@ setup(name='ninfo',
         'console_scripts': [
             'ninfo = ninfo:main',
         ],
-        'ninfo.plugin': [
-            'whois = ninfo.plugins.whois_plugin',
-            'geoip = ninfo.plugins.geoip_plugin',
-            'cymruwhois = ninfo.plugins.cymruwhois_plugin',
-        ]
     }
 )
