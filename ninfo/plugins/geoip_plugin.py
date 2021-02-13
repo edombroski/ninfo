@@ -17,8 +17,11 @@ class geoip(PluginBase):
     local = False
 
     def setup(self):
-        path  = self.plugin_config['path']
-        self.g = pygeoip.GeoIP(path)
+        try:
+            path  = self.plugin_config['path']
+            self.g = pygeoip.GeoIP(path)
+        except:
+            return False
 
     def get_info(self, ip):
         try :
