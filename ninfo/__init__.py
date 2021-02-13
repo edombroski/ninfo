@@ -1,5 +1,11 @@
 from pkg_resources import iter_entry_points
 
+import sys
+
+if not sys.warnoptions:
+    import warnings
+    warnings.simplefilter("ignore")
+
 import memcache
 
 import logging
